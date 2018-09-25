@@ -1,0 +1,8 @@
+
++ use ...
+
+  sudo make mplib-library.html
+
+  ... to avoid having to manually authorise every time
+  report build calls docker
+

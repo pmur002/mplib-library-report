@@ -1,0 +1,713 @@
+<html>
+  <head>
+<style type="text/css">
+.knitr .inline {
+  background-color: #f7f7f7;
+  border:solid 1px #B0B0B0;
+}
+.error {
+	font-weight: bold;
+	color: #FF0000;
+}
+.warning {
+	font-weight: bold;
+}
+.message {
+	font-style: italic;
+}
+.source, .output, .warning, .error, .message {
+	padding: 0 1em;
+  border:solid 1px #F7F7F7;
+}
+.source {
+  background-color: #f5f5f5;
+}
+.rimage .left {
+  text-align: left;
+}
+.rimage .right {
+  text-align: right;
+}
+.rimage .center {
+  text-align: center;
+}
+.hl.num {
+  color: #AF0F91;
+}
+.hl.str {
+  color: #317ECC;
+}
+.hl.com {
+  color: #AD95AF;
+  font-style: italic;
+}
+.hl.opt {
+  color: #000000;
+}
+.hl.std {
+  color: #585858;
+}
+.hl.kwa {
+  color: #295F94;
+  font-weight: bold;
+}
+.hl.kwb {
+  color: #B05A65;
+}
+.hl.kwc {
+  color: #55aa55;
+}
+.hl.kwd {
+  color: #BC5A65;
+  font-weight: bold;
+}
+</style>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <style type="text/css">
+    @media print {
+      body { }
+      p.img { text-align: center; page-break-inside: avoid }
+      img.CC { display: inline }
+    }
+    @media screen {
+      body { max-width: 800px; margin: auto }
+      p.img { text-align: center }
+      img.CC { display: inline }
+    }
+    p.date {
+      font-size: smaller;
+      margin: 0;
+    }
+    p.versionHistory {
+      color: gray
+    }
+    p.versionHistory a {
+      color: gray
+    }
+    p.ref {
+      text-indent: -2em;
+      padding-left: 2em;
+    }
+  </style>
+    <!-- PDFjs code (more at the end of the document) -->
+    <script src="https://mozilla.github.io/pdf.js/build/pdf.js"></script>
+  </head>
+  <body>
+    <h1>Building an mplib Shared Library</h1>
+    <p>
+      <span style="font-style: italic">by Paul Murrell</span>
+      <a href="http://orcid.org">
+        <img alt="" src="https://www.stat.auckland.ac.nz/~paul/ORCID/ORCiD.png" style="width: 16px; height: 16px; vertical-align: middle">
+      </a>
+      <span style="font-family: mono; font-size: small">
+        <a href="http://orcid.org/0000-0002-3224-8858">http://orcid.org/0000-0002-3224-8858</a>
+      </span>
+    </p>
+    <p class="date">
+    Version 1:
+Tuesday 25 September 2018
+  </p>
+
+
+    <hr>
+    <p><a rel="license" href="http://creativecommons.org/licenses/by/4.0/"><img class="CC" alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by/4.0/88x31.png"></a><br><span xmlns:dct="http://purl.org/dc/terms/" property="dct:title">This document</span>
+    by <span xmlns:cc="http://creativecommons.org/ns#" property="cc:attributionName">Paul
+    Murrell</span> is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by/4.0/">Creative
+    Commons Attribution 4.0 International License</a>.
+  </p>
+    <hr>
+    <p>
+    This report describes the construction of a shared library for
+    the MetaPost graphics system.
+  </p>
+    <div>
+      <h2>Table of Contents:</h2>
+      <ul style="list-style: none">
+        <li>
+          <a href="#intro">1. Introduction</a>
+        </li>
+        <li>
+          <a href="#static">2. mplib as a static library</a>
+        </li>
+        <li>
+          <a href="#shared">3. mplib as a shared library</a>
+        </li>
+        <li>
+          <a href="#summary">4. Summary</a>
+        </li>
+        <li>
+          <a href="#requirements">5. Technical requirements</a>
+        </li>
+        <li>
+          <a href="#Resources">6. Resources</a>
+        </li>
+        <li>
+          <a href="#references">7. References</a>
+        </li>
+      </ul>
+    </div>
+    <h2>
+      <a name="intro">1. Introduction</a>
+    </h2>
+    <p><a href="http://www.tug.org/metapost.html">MetaPost</a>
+    (<a href="#metapost-hobby">Hobby, 1998</a>) 
+    is a graphics language that provides some very useful 
+    features for describing curves.  For example, the 
+    following MetaPost code describes an infinity symbol 
+    from only four points (plus constraints that dictate the
+    direction that the curve should take at each of the points).
+  </p>
+<div class="chunk" id="unnamed-chunk-3"><div class="rcode"><div class="output"><pre class="knitr r">  outputtemplate := &quot;%j.svg&quot;;
+  outputformat := &quot;svg&quot;;
+  beginfig(1);
+  z0 = (0, 0);
+  z1 = (20, 10);
+  z2 = (20, 0);
+  z3 = (0, 10);
+  draw z0{dir 0}..z1{dir 0}..z2{dir 180}..z3{dir 180}..cycle;
+  endfig;
+  end
+</pre></div>
+</div></div>
+    <img src="infinity.svg">
+    <p>
+    MetaPost code is processed by a MetaPost compiler to produce
+    PostScript, PNG, or SVG output. 
+    The MetaPost compiler, called <code>mpost</code>, is built on
+    a MetaPost compiler library called <code>mplib</code> 
+    (<a href="#metapost">Hobby and the MetaPost development team, 2018</a> p. 3), which means that
+    other programs can include the MetaPost compiler.  For example, 
+    there is a Lua (<a href="#Ierusalimschy:1996:LEE:229593.229595">Ierusalimschy et al., 1996</a>) 
+    binding for the <code>mplib</code> library
+    that allows
+    MetaPost code to be embedded directly within a LuaTeX document 
+    (<a href="#luatex">The LuaTeX development team, 2017</a>).
+    The <a href="https://www.contextgarden.net/">ConTeXt document 
+    processing system</a> also builds on this Lua <code>mplib</code> 
+    binding to allow embedding of MetaPost code within ConTeXt documents.
+  </p>
+    <!-- ConTeXt builds on LuaTeX, which has MetaPost built in
+         (p2 of http://www.pragma-ade.com/general/manuals/metafun-p.pdf) -->
+    <!-- Lua mplib builds on mplib.c from MetaPost distro
+         (https://github.com/simoncozens/sile/issues/503)
+         TeXLive/source/texk/web2c/mplibdir/lmplib.c includes mplib.h etc -->
+    <p>
+    Although there are several mentions in TUGboat articles 
+    of developing the <code>mplib</code>
+    library as a system library that can be used by any application program
+    (<a href="#Hoekwater:TB27-1-18">Hoekwater, 2006</a>, 
+    <a href="#Hoekwater:TB28-3-317">Hoekwater and Hagen, 2007</a>,
+    <a href="#Hoekwater:TB29-3-380">Hoekwater, 2008</a>), and there is 
+    a MPLib API Manual (<a href="#mplibapi">Hoekwater and Scarso, 2018</a>), only the
+    <code>mpost</code> standalone program is included as
+    part of large TeX distributions such as 
+    <a href="https://www.tug.org/texlive/">TeX Live</a> and
+    <a href="https://miktex.org/">MikTeX</a>.  
+    Furthermore, there are no "development" distributions
+    of these packages that include header files, let alone 
+    pre-built libraries.
+  </p>
+    <p>
+    This means that, if we want to create a program that links to
+    the <code>mplib</code> library, we must start with a copy
+    of the MetaPost source code and do a bit more of the work 
+    ourselves.
+  </p>
+    <!-- <a href="http://tug.org/pipermail/metapost/2010-April/001917.html">email
+    thread on metapost@tug.org</a> -->
+    <p>
+    This report describes the steps for making use of the <code>mplib</code>
+    library within a new C program, with demonstrations of building both 
+    static and dynamic <code>mplib</code> libraries.
+  </p>
+    <p>
+    This report will focus solely on solutions within an Ubuntu Linux
+    environment.  The information should have some relevance to 
+    other Linux distributions, but may not be very helpful with
+    respect to Windows or Mac OS environments.
+  </p>
+    <h2>
+      <a name="static">2. mplib as a static library</a>
+    </h2>
+    <p>
+    It is straightforward to obtain the 
+    MetaPost compiler program <code>mpost</code> as part of TeX Live
+    (on Ubuntu, this comes as part of the <code>texlive-binaries</code>
+    package), but the TeX Live distribution does not contain the
+    <code>mplib</code> library.
+  </p>
+    <!-- https://packages.debian.org/sid/all/texlive-binaries/filelist -->
+    <p>
+    Fortunately, it is also straightforward to obtain and build the TeX Live 
+    source code (https://www.tug.org/texlive/) and, even better, 
+    we can just get the source code relating to MetaPost and build that
+    (https://www.tug.org/metapost.html; 
+    https://serveur-svn.lri.fr/svn/modhel/metapost/; user/pw = anonsvn/anonsvn).
+  </p>
+    <p>
+    The latter simply 
+    involves a subversion checkout of the MetaPost source files
+    followed by a call to the provided shell script <code>build.sh</code>.
+  </p>
+    <p>
+    The Dockerfile below builds a container based on Ubuntu 16.04 with
+    (the development version of) MetaPost downloaded and built in 
+    <code>/opt/MetaPost/trunk</code>.
+  </p>
+<div class="chunk" id="unnamed-chunk-4"><div class="rcode"><div class="output"><pre class="knitr r">  
+  # Base image
+  FROM ubuntu:16.04
+  MAINTAINER Paul Murrell &lt;paul@stat.auckland.ac.nz&gt;
+  
+  RUN apt-get update &amp;&amp; \
+      apt-get install -y \
+          subversion
+  
+  # Checkout MetaPost source
+  RUN mkdir /opt/MetaPost &amp;&amp; \
+      cd /opt/MetaPost &amp;&amp; \
+      svn co --username anonsvn --password anonsvn --trust-server-cert https://serveur-svn.lri.fr/svn/modhel/metapost/trunk 
+  
+  # Build MetaPost
+  RUN apt-get update &amp;&amp; \
+      apt-get install -y \
+          gcc \
+          g++ \
+          make \
+          texinfo
+  RUN cd /opt/MetaPost/trunk/ &amp;&amp; \
+      ./build.sh
+</pre></div>
+</div></div>
+    <p>
+    The result of this build includes several static <code>mplib</code> 
+    library files, as shown below.  These can be used to statically
+    link <code>mplib</code> as part of a new program.
+  </p>
+
+<div class="chunk" id="unnamed-chunk-6"><div class="rcode"><div class="output"><pre class="knitr r">  ls /opt/MetaPost/trunk/build/texk/web2c/libmplib*.o
+</pre></div>
+<div class="output"><pre class="knitr r">  /opt/MetaPost/trunk/build/texk/web2c/libmplibbackends_a-pngout.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibbackends_a-svgout.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mp.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mpmath.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mpmathdecimal.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mpmathdouble.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mpstrings.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-psout.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-tfmin.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibextramath_a-mpmathbinary.o
+</pre></div>
+</div></div>
+    <p>
+    In addition, the build generates a number of other libraries
+    that the <code>mplib</code> library relies on.  
+  </p>
+<div class="chunk" id="unnamed-chunk-7"><div class="rcode"><div class="output"><pre class="knitr r">  ls /opt/MetaPost/trunk/build/libs/*/*.a
+</pre></div>
+<div class="output"><pre class="knitr r">  /opt/MetaPost/trunk/build/libs/cairo/libcairo.a
+  /opt/MetaPost/trunk/build/libs/gmp/libgmp.a
+  /opt/MetaPost/trunk/build/libs/libpng/libpng.a
+  /opt/MetaPost/trunk/build/libs/mpfr/libmpfr.a
+  /opt/MetaPost/trunk/build/libs/pixman/libpixman.a
+  /opt/MetaPost/trunk/build/libs/zlib/libz.a
+</pre></div>
+</div></div>
+    <p>
+    The C code below is taken from the MPlib API manual.  This provides
+    a simple test of the <code>mplib</code> library that describes
+    a MetaPost path equivalent to ...
+  </p>
+    <pre>
+p := (0,0)..(10,10)..(10,-5)..cycle;
+  </pre>
+    <p>
+    ... and solves it (and prints out the solution).
+  </p>
+<div class="chunk" id="unnamed-chunk-8"><div class="rcode"><div class="output"><pre class="knitr r">  #include &lt;stdio.h&gt;
+  #include &lt;stdlib.h&gt;
+  #include &lt;string.h&gt;
+  #include &quot;mplib.h&quot;
+  
+  void mp_dump_solved_path (MP mp, mp_knot h) {
+      mp_knot p, q;
+      if (h == NULL) return;
+      p = h;
+      do {
+          q=mp_knot_next(mp,p);
+          printf (&quot;(%g,%g)..controls (%g,%g) and (%g,%g)&quot;,
+                  mp_number_as_double(mp,p-&gt;x_coord),
+                  mp_number_as_double(mp,p-&gt;y_coord),
+                  mp_number_as_double(mp,p-&gt;right_x),
+                  mp_number_as_double(mp,p-&gt;right_y),
+                  mp_number_as_double(mp,q-&gt;left_x),
+                  mp_number_as_double(mp,q-&gt;left_y));
+          p=q;
+          if ( p!=h || h-&gt;data.types.left_type!=mp_endpoint) {
+              printf (&quot;\n ..&quot;);
+          }
+      } while (p!=h);
+      if ( h-&gt;data.types.left_type!=mp_endpoint )
+          printf(&quot;cycle&quot;);
+      printf (&quot;;\n&quot;);
+  }
+  
+  int main (int argc, char ** argv) {
+      MP mp ;
+      mp_knot p, first, q;
+      MP_options * opt = mp_options () ;
+      opt -&gt; command_line = NULL;
+      opt -&gt; noninteractive = 1 ;
+      mp = mp_initialize ( opt ) ;
+      if ( ! mp ) exit ( EXIT_FAILURE ) ;
+      /* Equivalent Metapost code:
+         path p;
+         p := (0,0)..(10,10)..(10,-5)..cycle;
+      */
+      first = p = mp_append_knot(mp,NULL,0,0);
+      if ( ! p ) exit ( EXIT_FAILURE ) ;
+      q = mp_append_knot(mp,p,10,10);
+      if ( ! q ) exit ( EXIT_FAILURE ) ;
+      p = mp_append_knot(mp,q,10,-5);
+      if ( ! p ) exit ( EXIT_FAILURE ) ;
+      mp_close_path_cycle(mp, p, first);
+      /* mp_dump_path(mp, first); */
+      if (mp_solve_path(mp, first)) {
+          mp_dump_solved_path(mp, first);
+      }
+      mp_free_path(mp, first);
+      mp_finish ( mp ) ;
+      free(opt);
+      return 0;
+  }
+</pre></div>
+</div></div>
+    <p>
+    The following code compiles an executable from this C code,
+    using the static <code>mplib</code> library files ...
+  </p>
+<div class="chunk" id="unnamed-chunk-9"><div class="rcode"><div class="output"><pre class="knitr r">  gcc -c -I/opt/MetaPost/trunk/build/texk/web2c/ -o mplib-test-static.o mplib-test.c
+</pre></div>
+
+</div></div>
+<div class="chunk" id="unnamed-chunk-10"><div class="rcode"><div class="output"><pre class="knitr r">  gcc -o mplib-test-static mplib-test-static.o
+      /opt/MetaPost/trunk/build/texk/web2c/libmplib*.o
+      /opt/MetaPost/trunk/build/texk/web2c/mplibdir/libmputil*.o
+      -L/opt/MetaPost/trunk/build/libs/libpng -lpng
+      -L/opt/MetaPost/trunk/build/libs/cairo -lcairo
+      -L/opt/MetaPost/trunk/build/libs/pixman -lpixman
+      -L/opt/MetaPost/trunk/build/libs/mpfr -lmpfr
+      -L/opt/MetaPost/trunk/build/libs/gmp -lgmp
+      -L/opt/MetaPost/trunk/build/libs/zlib -lz
+      -L/opt/MetaPost/trunk/build/texk/kpathsea/.libs -lkpathsea -lm
+</pre></div>
+
+</div></div>
+    <p>
+    ... and the result of this program is a solved MetaPost path.
+  </p>
+<div class="chunk" id="unnamed-chunk-11"><div class="rcode"><div class="output"><pre class="knitr r">  ./mplib-test-static
+</pre></div>
+<div class="output"><pre class="knitr r">  (0,0)..controls (-1.8685,6.35925) and (4.02429,12.1436)
+   ..(10,10)..controls (16.8519,7.54208) and (16.9642,-2.22969)
+   ..(10,-5)..controls (5.87875,-6.6394) and (1.26079,-4.29094)
+   ..cycle;
+</pre></div>
+</div></div>
+    <h2>
+      <a name="shared">3. mplib as a shared library</a>
+    </h2>
+    <p>
+    Building a shared library version of <code>mplib</code> is very similar
+    to the static build.  The only difficulty is that the <code>build.sh</code>
+    script only generates statically linked libraries
+    (see the
+    <a href="https://serveur-svn.lri.fr/svn/modhel/metapost/trunk/INSTALL">INSTALL file</a>; 
+    user/pw = anonsvn/anonsvn).
+    However, if we specify <code>CFLAGS=-fpic</code>
+    before calling the <code>build.sh</code> script, the build produces
+    object files that can be used to create a shared library.
+  </p>
+    <!-- "For now, the executable still contains a statically linked libmplib." 
+  -->
+    <p>
+    The Dockerfile below shows this minor change.  It also takes
+    the next step, building the shared library <code>libmplib.so</code>,
+    installing that in <code>/usr/lib</code>, and installing the
+    <code>mplib.h</code> header file in <code>/usr/include</code>.
+  </p>
+<div class="chunk" id="unnamed-chunk-12"><div class="rcode"><div class="output"><pre class="knitr r">  
+  # Base image
+  FROM ubuntu:16.04
+  MAINTAINER Paul Murrell &lt;paul@stat.auckland.ac.nz&gt;
+  
+  RUN apt-get update &amp;&amp; \
+      apt-get install -y \
+          subversion
+  
+  # Checkout MetaPost source
+  RUN mkdir /opt/MetaPost &amp;&amp; \
+      cd /opt/MetaPost &amp;&amp; \
+      svn co --username anonsvn --password anonsvn --trust-server-cert https://serveur-svn.lri.fr/svn/modhel/metapost/trunk 
+  
+  # Build MetaPost
+  RUN apt-get update &amp;&amp; \
+      apt-get install -y \
+          gcc \
+          g++ \
+          make \
+          texinfo
+  RUN cd /opt/MetaPost/trunk/ &amp;&amp; \
+      CFLAGS=-fpic ./build.sh
+  
+  # Build MetaPost shared library
+  RUN cd /opt/MetaPost/trunk/build/texk/web2c &amp;&amp; \
+      gcc -shared -o libmplib.so libmplib*.o mplibdir/libmputil*.o \
+          -L/opt/MetaPost/trunk/build/libs/libpng -lpng \
+          -L/opt/MetaPost/trunk/build/libs/cairo -lcairo \
+          -L/opt/MetaPost/trunk/build/libs/pixman -lpixman \
+          -L/opt/MetaPost/trunk/build/libs/mpfr -lmpfr \
+          -L/opt/MetaPost/trunk/build/libs/gmp -lgmp \ 
+          -L/opt/MetaPost/trunk/build/texk/kpathsea/.libs -lkpathsea \
+          -L/opt/MetaPost/trunk/build/libs/zlib -lz \
+          -lm
+  
+  # INSTALL MetaPost shared library
+  RUN cp /opt/MetaPost/trunk/build/texk/web2c/libmplib.so /usr/lib &amp;&amp; \
+      cp /opt/MetaPost/trunk/build/texk/web2c/mplib.h /usr/include
+</pre></div>
+</div></div>
+    <p>
+    With this set up, building our test program is as simple as the 
+    following ...
+  </p>
+<div class="chunk" id="unnamed-chunk-13"><div class="rcode"><div class="output"><pre class="knitr r">  gcc -c -fpic -o mplib-test-shared.o mplib-test.c
+</pre></div>
+
+<div class="output"><pre class="knitr r">  gcc -o mplib-test-shared mplib-test-shared.o -lmplib
+</pre></div>
+
+</div></div>
+<div class="chunk" id="unnamed-chunk-14"><div class="rcode"><div class="output"><pre class="knitr r">  ./mplib-test-shared
+</pre></div>
+<div class="output"><pre class="knitr r">  (0,0)..controls (-1.8685,6.35925) and (4.02429,12.1436)
+   ..(10,10)..controls (16.8519,7.54208) and (16.9642,-2.22969)
+   ..(10,-5)..controls (5.87875,-6.6394) and (1.26079,-4.29094)
+   ..cycle;
+</pre></div>
+</div></div>
+    <h2>Building from TeX Live source</h2>
+    <p>
+    A similar approach can be used to build MetaPost libraries
+    from a full set of TeX Live source code (rather than just the
+    MetaPost subset).  One difference is that the build script
+    is called <code>Build</code> instead of <code>build.sh</code>,
+    and another is that the build files are generated within a 
+    directory called <code>Work</code> instead of a directory
+    called <code>build</code>,
+    but otherwise the process is very similar.
+    An obvious disadvantage to using the complete TeX Live source
+    is that the download is much large and the build is longer and
+    produces more files.  However, a complete TeX Live build may
+    be useful for supporting a wider range of MetaPost images
+    (e.g., images that include TeX-formatted text labels).
+  </p>
+    <h2>
+      <a name="summary">4. Summary</a>
+    </h2>
+    <p>
+  </p>
+    <p>
+  </p>
+    <h2>
+      <a name="requirements">5. Technical requirements</a>
+    </h2>
+    <p>
+    The examples and discussion in this document relate to ...
+  </p>
+    <p>
+    This report was generated within a Docker container
+    (see <a href="#Resources">Resources</a> section below).
+  </p>
+    <h2>
+      <a name="Resources">6. Resources</a>
+    </h2>
+    <ul>
+      <li>
+      The <a href="mplib-library.cml">raw source file</a> for this
+      report, a <a href="mplib-library.xml">valid XML</a>
+      transformation of the source file, a <a href="mplib-library.Rhtml">'knitr' document</a> generated from
+      the XML file, 
+      two <a href="toc.R">R</a> <a href="bib.R">files</a> and
+      the <a href="mplib-library.bib">bibtex file</a>
+      that are used to generate the table of contents and reference sections,
+      two <a href="common.xsl">XSL</a> <a href="knitr.xsl">files</a> and an 
+      <a href="knit.R">R file</a> that are used to transform the XML to
+      the 'knitr' document, and a <a href="Makefile">Makefile</a> that
+      contains code for the other transformations and coordinates
+      everything.  
+      These materials are also available
+      on <a href="https://github.com/pmur002/mplib-library-report/releases/tag/v1">github</a>.
+    </li>
+      <li>
+<a href="grImportOLD_0.9-1t.tar.gz">Version 0.9-1</a>
+      of 'grImport' packaged as 'grImportOLD'.
+    </li>
+      <li>
+      This report was generated within a 
+      <a href="https://www.docker.com/">Docker</a> container.
+      The Docker command to build the report is included in the Makefile above.
+      The Docker image for the container is available from
+      <a href="https://hub.docker.com/r/pmur002/mplib-library/">Docker Hub</a>;
+      alternatively, the image can be rebuilt from its 
+      <a href="Dockerfile">Dockerfile</a>.
+    </li>
+    </ul>
+    <h2>How to cite this document</h2>
+    <p>
+    Murrell, P. (2018). "Building an mplib Shared Library" 
+    Technical Report 2018-??, Department of Statistics, The University of Auckland. 
+    [ <a href="how-to-cite.bib">bib</a> ] 
+  </p>
+    <h2>
+      <a name="references">7. References</a>
+    </h2>
+    <!--
+    See http://ftp.math.utah.edu/pub/tex/bib/tugboat.html for 
+    bibtex refs for TUGBoat articles on MetaPost.
+  -->
+    <dl>
+<dt>
+[<a name="metapost-hobby">Hobby, 1998</a>]
+</dt>
+<dd>
+Hobby, J. (1998).
+ A user's manual for metapost.
+[ <a href="mplib-library-bib_bib.html#metapost-hobby">bib</a> ]
+
+</dd>
+
+
+<dt>
+[<a name="metapost">Hobby and the MetaPost development team, 2018</a>]
+</dt>
+<dd>
+Hobby, J. D. and the MetaPost development team (2018).
+ <em>METAPOST a user’s manual</em>.
+[ <a href="mplib-library-bib_bib.html#metapost">bib</a> | 
+<a href="http://www.tug.org/docs/metapost/mpman.pdf">.pdf</a> ]
+
+</dd>
+
+
+<dt>
+[<a name="Hoekwater:TB27-1-18">Hoekwater, 2006</a>]
+</dt>
+<dd>
+Hoekwater, T. (2006).
+ MetaPost developmentsautumn 2006.
+ 27(1):18--21.
+[ <a href="mplib-library-bib_bib.html#Hoekwater:TB27-1-18">bib</a> | 
+<a href="http://www.tug.org/TUGboat/tb27-1/tb86hoekwater-metapost.pdf">.pdf</a> ]
+
+</dd>
+
+
+<dt>
+[<a name="Hoekwater:TB29-3-380">Hoekwater, 2008</a>]
+</dt>
+<dd>
+Hoekwater, T. (2008).
+ MetaPost developments: MPlib project report.
+ 29(3):380--382.
+[ <a href="mplib-library-bib_bib.html#Hoekwater:TB29-3-380">bib</a> | 
+<a href="http://www.tug.org/TUGboat/tb29-3/tb93hoekwater.pdf">.pdf</a> ]
+
+</dd>
+
+
+<dt>
+[<a name="Hoekwater:TB28-3-317">Hoekwater and Hagen, 2007</a>]
+</dt>
+<dd>
+Hoekwater, T. and Hagen, H. (2007).
+ MPlib: MetaPost as a reusable component.
+ 28(3):317--318.
+[ <a href="mplib-library-bib_bib.html#Hoekwater:TB28-3-317">bib</a> | 
+<a href="http://www.tug.org/TUGboat/tb28-3/tb90hoekwater-mplib.pdf">.pdf</a> ]
+
+</dd>
+
+
+<dt>
+[<a name="mplibapi">Hoekwater and Scarso, 2018</a>]
+</dt>
+<dd>
+Hoekwater, T. and Scarso, L. (2018).
+ <em>MPlib API documentation, version 2.00</em>.
+[ <a href="mplib-library-bib_bib.html#mplibapi">bib</a> | 
+<a href="http://mirror.aut.ac.nz/CTAN/systems/doc/metapost/mplibapi.pdf">.pdf</a> ]
+
+</dd>
+
+
+<dt>
+[<a name="Ierusalimschy:1996:LEE:229593.229595">Ierusalimschy et al., 1996</a>]
+</dt>
+<dd>
+Ierusalimschy, R., de Figueiredo, L. H., and Filho, W. C. (1996).
+ Lua - an extensible extension language.
+ <em>Softw. Pract. Exper.</em>, 26(6):635--652.
+[ <a href="mplib-library-bib_bib.html#Ierusalimschy:1996:LEE:229593.229595">bib</a> | 
+<a href="http://dx.doi.org/10.1002/(SICI)1097-024X(199606)26:6&lt;635::AID-SPE26&gt;3.0.CO;2-P">DOI</a> | 
+<a href="http://dx.doi.org/10.1002/(SICI)1097-024X(199606)26:6&lt;635::AID-SPE26&gt;3.0.CO;2-P">http</a> ]
+
+</dd>
+
+
+<dt>
+[<a name="luatex">The LuaTeX development team, 2017</a>]
+</dt>
+<dd>
+The LuaTeX development team (2017).
+ <em>LuaTeX Reference Manual</em>.
+[ <a href="mplib-library-bib_bib.html#luatex">bib</a> | 
+<a href="http://www.luatex.org/svn/trunk/manual/luatex.pdf">.pdf</a> ]
+
+</dd>
+</dl>
+    <hr>
+    <p><a rel="license" href="http://creativecommons.org/licenses/by/4.0/"><img class="CC" alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by/4.0/88x31.png"></a><br><span xmlns:dct="http://purl.org/dc/terms/" property="dct:title">This document</span>
+    by <span xmlns:cc="http://creativecommons.org/ns#" property="cc:attributionName">Paul
+    Murrell</span> is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by/4.0/">Creative
+    Commons Attribution 4.0 International License</a>.
+  </p>
+    <script>
+  // Use async/await so that PDF files loaded one at a time
+  async function loadPDFs() {
+    var pdfcanvas = document.querySelectorAll("canvas.pdf");
+    var i;
+    for (i=0; i < pdfcanvas.length; i++) {
+        var canvas = pdfcanvas[i];
+        var canvasid = canvas.id;
+        var pdf = await pdfjsLib.getDocument(canvasid + '.pdf');
+        var page = await pdf.getPage(1);
+        var scale = canvas.getAttribute("scale");
+        if (!scale) {
+            scale = 100/72;
+        }
+        var viewport = page.getViewport(scale);
+        var context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        var renderContext = {
+            canvasContext: context,
+            viewport: viewport
+        };
+        page.render(renderContext);
+    }
+  }
+  loadPDFs();
+  </script>
+  </body>
+</html>
