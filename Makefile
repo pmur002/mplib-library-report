@@ -1,8 +1,11 @@
 
-TARFILE = ../skew-deposit-$(shell date +'%Y-%m-%d').tar.gz
+TARFILE = ../mplib-library-deposit-$(shell date +'%Y-%m-%d').tar.gz
 # For building on my office desktop
 # Rscript = ~/R/r-devel/BUILD/bin/Rscript
 Rscript = Rscript
+
+all:
+	make docker
 
 %.xml: %.cml %.bib
 	# Protect HTML special chars in R code chunks
@@ -19,11 +22,11 @@ Rscript = Rscript
 	$(Rscript) knit.R $*.Rhtml
 
 docker:
-	sudo docker run -v $(shell pwd):/home/work/ -w /home/work --rm pmur002/skew make skew.html
+	sudo docker run -v $(shell pwd):/home/work/ -w /home/work --rm pmur002/mplib-library make mplib-library.html
 
 web:
 	make docker
-	cp -r ../skew-report/* ~/Web/Reports/grImport/skew/
+	cp -r ../mplib-library-report/* ~/Web/Reports/MetaPost/mplib-library/
 
 zip:
 	make docker

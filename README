@@ -1,8 +1,9 @@
 
 + use ...
 
-  sudo make mplib-library.html
+  make docker 
 
-  ... to avoid having to manually authorise every time
-  report build calls docker
+  ... to build report because need to work in Docker containers
+  that have the MetaPost source builds in them
+
 
