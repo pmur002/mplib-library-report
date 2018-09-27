@@ -23,6 +23,9 @@ RUN apt-get update && apt-get install -y \
 RUN Rscript -e 'install.packages(c("knitr", "devtools"), repos="https://cran.rstudio.com/")'
 RUN Rscript -e 'library(devtools); install_version("xml2", "1.1.1", repos="https://cran.rstudio.com/")'
 
+RUN apt-get update && apt-get install -y \
+    texlive-metapost
+
 RUN apt-get install -y locales && locale-gen en_US.UTF-8
 ENV LANG en_US.UTF-8
 

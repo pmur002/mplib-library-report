@@ -71,7 +71,7 @@ options(bitmapType="cairo")
   </p>
   <hr/>
   <p>
-    This report describes the construction of a shared library for
+    This report describes the steps involved in building a shared library for
     the MetaPost graphics system.
   </p>
 
@@ -92,11 +92,37 @@ mpostcmd <- "mpost infinity.mp"
 system(mpostcmd)
 cat(readLines("infinity.mp"), sep="\n")
   </rcode>
+  <p>
+    The MetaPost description of a curve
+    is processed by a MetaPost compiler, <code>mpost</code>, which calculates
+    a set of Bezier curves (CITE).  The command below processes MetaPost
+    code in the file <code>infinity.mp</code> and produces
+    a file <code>infinity.log</code>.
+  </p>
+  <rcode echo="FALSE">
+cmd <- "mpost -s tracingchoices=1 infinity.mp"
+result <- system(cmd, intern=TRUE)
+cat(cmd)
+log <- readLines("infinity.log")
+  </rcode>
+  <p>
+    The file <code>infinity.log</code> shows the Bezier control points
+    that <code>mpost</code> has calculated (starting from the line
+    "<!--rinline log[grep("after choices", log)]-->".
+  </p>
+  <a name="solvedpath"/>
+  <rcode echo="FALSE">  
+cat(log, sep="\n")
+  </rcode>
+  <p>
+    The MetaPost compiler also produces 
+    PostScript, PNG, or SVG output to render the Bezier curves.  
+    In the example, we create a file <code>infinity.svg</code>,
+    which is shown below.
+  </p>
   <img src="infinity.svg"/>
   <p>
-    MetaPost code is processed by a MetaPost compiler to produce
-    PostScript, PNG, or SVG output. 
-    The MetaPost compiler, called <code>mpost</code>, is built on
+    The MetaPost compiler is built on
     a MetaPost compiler library called <code>mplib</code> 
     (<a href="#metapost"/> p. 3), which means that
     other programs can include the MetaPost compiler.  For example, 
@@ -109,11 +135,22 @@ cat(readLines("infinity.mp"), sep="\n")
     processing system</a> also builds on this Lua <code>mplib</code> 
     binding to allow embedding of MetaPost code within ConTeXt documents.
   </p>
-    <!-- ConTeXt builds on LuaTeX, which has MetaPost built in
-         (p2 of http://www.pragma-ade.com/general/manuals/metafun-p.pdf) -->
-    <!-- Lua mplib builds on mplib.c from MetaPost distro
-         (https://github.com/simoncozens/sile/issues/503)
-         TeXLive/source/texk/web2c/mplibdir/lmplib.c includes mplib.h etc -->
+  <!-- ConTeXt builds on LuaTeX, which has MetaPost built in
+       (p2 of http://www.pragma-ade.com/general/manuals/metafun-p.pdf) -->
+  <!-- Lua mplib builds on mplib.c from MetaPost distro
+       (https://github.com/simoncozens/sile/issues/503)
+       TeXLive/source/texk/web2c/mplibdir/lmplib.c includes mplib.h etc -->
+  <p>
+    The <code>mplib</code> library provides C functions that allow us
+    to define MetaPost curves, and solve them, in C code.
+    For example, the C code below uses the <code>mplib</code> API to
+    describe and solve the infinity symbol that we draw with MetaPost
+    code earlier.
+  </p>
+  <rcode echo="FALSE">
+cat(readLines("infinity.c"),
+    sep="\n")
+  </rcode>
   <p>
     Although there are several mentions in TUGboat articles 
     of developing the <code>mplib</code>
@@ -167,7 +204,7 @@ cat(readLines("infinity.mp"), sep="\n")
     https://serveur-svn.lri.fr/svn/modhel/metapost/; user/pw = anonsvn/anonsvn).
   </p>
   <p>
-    The latter simply 
+    Building MetaPost simply 
     involves a subversion checkout of the MetaPost source files
     followed by a call to the provided shell script <code>build.sh</code>.
   </p>
@@ -181,9 +218,12 @@ cat(readLines("MetaPost-static/Dockerfile"),
     sep="\n")
   </rcode>
   <p>
-    The result of this build includes several static <code>mplib</code> 
-    library files, as shown below.  These can be used to statically
-    link <code>mplib</code> as part of a new program.
+    In order to compile a new C program against this <code>mplib</code>
+    build, we need the location of the <code>mplib.h</code> header file
+    and we need the correct set of libraries to link against.
+  </p>
+  <p>
+    The header file is easy enough to find ...
   </p>
   <rcode echo="FALSE">
 dockerrun <- function(container, cmd) {
@@ -192,13 +232,22 @@ dockerrun <- function(container, cmd) {
 }
   </rcode>
   <rcode echo="FALSE">
-cmd <- "ls /opt/MetaPost/trunk/build/texk/web2c/libmplib*.o"
+cmd <- "find /opt/MetaPost/trunk -name mplib.h"
+cat(cmd)
+dockerrun("mplib-static", cmd)
+  </rcode>
+  <p>
+    We can also see that the build generated several static <code>mplib</code> 
+    library files ... 
+  </p>
+  <rcode echo="FALSE">
+cmd <- "find /opt/MetaPost/trunk/build/texk/web2c -name *libmp*.a"
 cat(cmd)
 dockerrun("mplib-static", cmd)
   </rcode>
   <p>
     In addition, the build generates a number of other libraries
-    that the <code>mplib</code> library relies on.  
+    that the <code>mplib</code> library depends on.  
   </p>
   <rcode echo="FALSE">
 cmd <- "ls /opt/MetaPost/trunk/build/libs/*/*.a"
@@ -206,33 +255,20 @@ cat(cmd)
 dockerrun("mplib-static", cmd)
   </rcode>
   <p>
-    The C code below is taken from the MPlib API manual.  This provides
-    a simple test of the <code>mplib</code> library that describes
-    a MetaPost path equivalent to ...
-  </p>
-  <pre>
-p := (0,0)..(10,10)..(10,-5)..cycle;
-  </pre>
-  <p>
-    ... and solves it (and prints out the solution).
-  </p>
-  <rcode echo="FALSE">
-cat(readLines("mplib-test.c"),
-    sep="\n")
-  </rcode>
-  <p>
-    The following code compiles an executable from this C code,
+    These can be used to statically
+    link <code>mplib</code> as part of a new program.
+    The following code compiles an executable from <code>infinity.c</code>,
     using the static <code>mplib</code> library files ...
   </p>
   <rcode echo="FALSE">
-cmd <- "gcc -c -I/opt/MetaPost/trunk/build/texk/web2c/ -o mplib-test-static.o mplib-test.c"
+cmd <- "gcc -c -I/opt/MetaPost/trunk/build/texk/web2c/ -o infinity-static.o infinity.c"
 cat(cmd)    
 dockerrun("mplib-static", cmd)
   </rcode>
   <rcode echo="FALSE">
-cmd <- paste("gcc -o mplib-test-static mplib-test-static.o",
-             "/opt/MetaPost/trunk/build/texk/web2c/libmplib*.o",
-             "/opt/MetaPost/trunk/build/texk/web2c/mplibdir/libmputil*.o",
+cmd <- paste("gcc -o infinity-static infinity-static.o",
+             "-L/opt/MetaPost/trunk/build/texk/web2c",
+             "-lmplibcore -lmplibbackends -lmputil -lmplibextramath",
              "-L/opt/MetaPost/trunk/build/libs/libpng -lpng",
              "-L/opt/MetaPost/trunk/build/libs/cairo -lcairo",
              "-L/opt/MetaPost/trunk/build/libs/pixman -lpixman",
@@ -245,10 +281,13 @@ cat(gsub(" (/|-L)", "\n    \\1", cmd))
 dockerrun("mplib-static", cmd)
   </rcode>
   <p>
-    ... and the result of this program is a solved MetaPost path.
+    ... and the result of this program is the solved MetaPost path.
+    This path should correspond to the result that we saw 
+    earlier in the <a href="#solvedpath">log file that was generated
+    by <code>mpost</code></a>.
   </p>
   <rcode echo="FALSE">
-cmd <- "./mplib-test-static"
+cmd <- "./infinity-static"
 cat(cmd)    
 dockerrun("mplib-static", cmd)
   </rcode>
@@ -268,9 +307,21 @@ dockerrun("mplib-static", cmd)
   <!-- "For now, the executable still contains a statically linked libmplib." 
   -->
   <p>
-    The Dockerfile below shows this minor change.  It also takes
-    the next step, building the shared library <code>libmplib.so</code>,
-    installing that in <code>/usr/lib</code>, and installing the
+    Another difference is that we build <code>libmplib.so</code> using
+    the <code>mplib</code> object
+    files themselves 
+    so that they are part of the shared library itself.
+  </p>
+  <rcode echo="FALSE">
+cmd <- "find /opt/MetaPost/trunk/build/texk/web2c -name libmp*.o"
+cat(cmd)
+dockerrun("mplib-static", cmd)
+  </rcode>
+  <p>
+    The Dockerfile below shows these minor changes.  It also takes
+    further steps, 
+    installing the shared library <code>libmplib.so</code>
+    in <code>/usr/lib</code>, and installing the
     <code>mplib.h</code> header file in <code>/usr/include</code>.
   </p>
   <rcode echo="FALSE">
@@ -282,15 +333,15 @@ cat(readLines("MetaPost-shared/Dockerfile"),
     following ...
   </p>
   <rcode echo="FALSE">
-cmd <- "gcc -c -fpic -o mplib-test-shared.o mplib-test.c"
+cmd <- "gcc -c -fpic -o infinity-shared.o infinity.c"
 cat(cmd)    
 dockerrun("mplib-shared", cmd)
-cmd <- "gcc -o mplib-test-shared mplib-test-shared.o -lmplib"
+cmd <- "gcc -o infinity-shared infinity-shared.o -lmplib"
 cat(cmd)    
 dockerrun("mplib-shared", cmd)
   </rcode>
   <rcode echo="FALSE">
-cmd <- "./mplib-test-shared"
+cmd <- "./infinity-shared"
 cat(cmd)    
 dockerrun("mplib-shared", cmd)
   </rcode>
@@ -306,7 +357,7 @@ dockerrun("mplib-shared", cmd)
     called <code>build</code>,
     but otherwise the process is very similar.
     An obvious disadvantage to using the complete TeX Live source
-    is that the download is much large and the build is longer and
+    is that the download is much larger and the build is longer and
     produces more files.  However, a complete TeX Live build may
     be useful for supporting a wider range of MetaPost images
     (e.g., images that include TeX-formatted text labels).

@@ -105,7 +105,7 @@
     </p>
     <p class="date">
     Version 1:
-Tuesday 25 September 2018
+Thursday 27 September 2018
   </p>
 
 
@@ -117,7 +117,7 @@ Tuesday 25 September 2018
   </p>
     <hr>
     <p>
-    This report describes the construction of a shared library for
+    This report describes the steps involved in building a shared library for
     the MetaPost graphics system.
   </p>
     <div>
@@ -169,11 +169,54 @@ Tuesday 25 September 2018
   end
 </pre></div>
 </div></div>
+    <p>
+    The MetaPost description of a curve
+    is processed by a MetaPost compiler, <code>mpost</code>, which calculates
+    a set of Bezier curves (CITE).  The command below processes MetaPost
+    code in the file <code>infinity.mp</code> and produces
+    a file <code>infinity.log</code>.
+  </p>
+<div class="chunk" id="unnamed-chunk-4"><div class="rcode"><div class="output"><pre class="knitr r">  mpost -s tracingchoices=1 infinity.mp
+</pre></div>
+</div></div>
+    <p>
+    The file <code>infinity.log</code> shows the Bezier control points
+    that <code>mpost</code> has calculated (starting from the line
+    "<code class="knitr inline">Path at line 8, after choices:</code>".
+  </p>
+    <a name="solvedpath"></a>
+<div class="chunk" id="unnamed-chunk-5"><div class="rcode"><div class="output"><pre class="knitr r">  This is MetaPost, version 1.999 (TeX Live 2015/Debian) (kpathsea version 6.2.1)  27 SEP 2018 02:39
+  **infinity.mp
+  (/usr/share/texlive/texmf-dist/metapost/base/mpost.mp
+  (/usr/share/texlive/texmf-dist/metapost/base/plain.mp
+  Preloading the plain mem file, version 1.005) ) (./infinity.mp
+  Path at line 8, before choices:
+  (0,0){4096,0}
+   ..{4096,0}(20,10){4096,0}
+   ..{-4096,0}(20,0){-4096,0}
+   ..{-4096,0}(0,10){-4096,0}
+   ..{4096,0}cycle
+  
+  Path at line 8, after choices:
+  (0,0)..controls (7.86894,0) and (12.13106,10)
+   ..(20,10)..controls (26.66667,10) and (26.66667,0)
+   ..(20,0)..controls (12.13106,0) and (7.86894,10)
+   ..(0,10)..controls (-6.66667,10) and (-6.66667,0)
+   ..cycle
+  
+   [1] )
+  1 output file written: infinity.svg
+</pre></div>
+</div></div>
+    <p>
+    The MetaPost compiler also produces 
+    PostScript, PNG, or SVG output to render the Bezier curves.  
+    In the example, we create a file <code>infinity.svg</code>,
+    which is shown below.
+  </p>
     <img src="infinity.svg">
     <p>
-    MetaPost code is processed by a MetaPost compiler to produce
-    PostScript, PNG, or SVG output. 
-    The MetaPost compiler, called <code>mpost</code>, is built on
+    The MetaPost compiler is built on
     a MetaPost compiler library called <code>mplib</code> 
     (<a href="#metapost">Hobby and the MetaPost development team, 2018</a> p. 3), which means that
     other programs can include the MetaPost compiler.  For example, 
@@ -187,10 +230,72 @@ Tuesday 25 September 2018
     binding to allow embedding of MetaPost code within ConTeXt documents.
   </p>
     <!-- ConTeXt builds on LuaTeX, which has MetaPost built in
-         (p2 of http://www.pragma-ade.com/general/manuals/metafun-p.pdf) -->
+       (p2 of http://www.pragma-ade.com/general/manuals/metafun-p.pdf) -->
     <!-- Lua mplib builds on mplib.c from MetaPost distro
-         (https://github.com/simoncozens/sile/issues/503)
-         TeXLive/source/texk/web2c/mplibdir/lmplib.c includes mplib.h etc -->
+       (https://github.com/simoncozens/sile/issues/503)
+       TeXLive/source/texk/web2c/mplibdir/lmplib.c includes mplib.h etc -->
+    <p>
+    The <code>mplib</code> library provides C functions that allow us
+    to define MetaPost curves, and solve them, in C code.
+    For example, the C code below uses the <code>mplib</code> API to
+    describe and solve the infinity symbol that we draw with MetaPost
+    code earlier.
+  </p>
+<div class="chunk" id="unnamed-chunk-6"><div class="rcode"><div class="output"><pre class="knitr r">  #include &lt;stdio.h&gt;
+  #include &lt;stdlib.h&gt;
+  #include &lt;string.h&gt;
+  #include &quot;mplib.h&quot;
+  
+  void mp_dump_solved_path (MP mp, mp_knot h) {
+      mp_knot p, q;
+      if (h == NULL) return;
+      p = h;
+      do {
+          q=mp_knot_next(mp,p);
+          printf (&quot;(%g,%g)..controls (%g,%g) and (%g,%g)&quot;,
+                  mp_number_as_double(mp,p-&gt;x_coord),
+                  mp_number_as_double(mp,p-&gt;y_coord),
+                  mp_number_as_double(mp,p-&gt;right_x),
+                  mp_number_as_double(mp,p-&gt;right_y),
+                  mp_number_as_double(mp,q-&gt;left_x),
+                  mp_number_as_double(mp,q-&gt;left_y));
+          p=q;
+          if ( p!=h || h-&gt;data.types.left_type!=mp_endpoint) {
+              printf (&quot;\n ..&quot;);
+          }
+      } while (p!=h);
+      if ( h-&gt;data.types.left_type!=mp_endpoint )
+          printf(&quot;cycle&quot;);
+      printf (&quot;;\n&quot;);
+  }
+  
+  int main (int argc, char ** argv) {
+      MP mp;
+      mp_knot p, first, q;
+      int result;
+      MP_options * opt = mp_options();
+      opt -&gt; command_line = NULL;
+      opt -&gt; noninteractive = 1;
+      mp = mp_initialize(opt);
+      first = p = mp_append_knot(mp, NULL, 0, 0);
+      mp_set_knot_direction(mp, p, 1, 0);
+      q = mp_append_knot(mp, p, 20, 10);
+      mp_set_knot_direction(mp, q, 1, 0);
+      p = mp_append_knot(mp, q, 20, 0);
+      mp_set_knot_direction(mp, p, -1, 0);
+      q = mp_append_knot(mp, p, 0, 10);
+      mp_set_knot_direction(mp, q, -1, 0);
+      mp_close_path_cycle(mp, q, first);
+      if (mp_solve_path(mp, first)) {
+          mp_dump_solved_path(mp, first);
+      }
+      mp_free_path(mp, first);
+      mp_finish(mp);
+      free(opt);
+      return 0;
+  }
+</pre></div>
+</div></div>
     <p>
     Although there are several mentions in TUGboat articles 
     of developing the <code>mplib</code>
@@ -245,7 +350,7 @@ Tuesday 25 September 2018
     https://serveur-svn.lri.fr/svn/modhel/metapost/; user/pw = anonsvn/anonsvn).
   </p>
     <p>
-    The latter simply 
+    Building MetaPost simply 
     involves a subversion checkout of the MetaPost source files
     followed by a call to the provided shell script <code>build.sh</code>.
   </p>
@@ -254,7 +359,7 @@ Tuesday 25 September 2018
     (the development version of) MetaPost downloaded and built in 
     <code>/opt/MetaPost/trunk</code>.
   </p>
-<div class="chunk" id="unnamed-chunk-4"><div class="rcode"><div class="output"><pre class="knitr r">  
+<div class="chunk" id="unnamed-chunk-7"><div class="rcode"><div class="output"><pre class="knitr r">  
   # Base image
   FROM ubuntu:16.04
   MAINTAINER Paul Murrell &lt;paul@stat.auckland.ac.nz&gt;
@@ -280,30 +385,36 @@ Tuesday 25 September 2018
 </pre></div>
 </div></div>
     <p>
-    The result of this build includes several static <code>mplib</code> 
-    library files, as shown below.  These can be used to statically
-    link <code>mplib</code> as part of a new program.
+    In order to compile a new C program against this <code>mplib</code>
+    build, we need the location of the <code>mplib.h</code> header file
+    and we need the correct set of libraries to link against.
+  </p>
+    <p>
+    The header file is easy enough to find ...
   </p>
 
-<div class="chunk" id="unnamed-chunk-6"><div class="rcode"><div class="output"><pre class="knitr r">  ls /opt/MetaPost/trunk/build/texk/web2c/libmplib*.o
+<div class="chunk" id="unnamed-chunk-9"><div class="rcode"><div class="output"><pre class="knitr r">  find /opt/MetaPost/trunk -name mplib.h
 </pre></div>
-<div class="output"><pre class="knitr r">  /opt/MetaPost/trunk/build/texk/web2c/libmplibbackends_a-pngout.o
-  /opt/MetaPost/trunk/build/texk/web2c/libmplibbackends_a-svgout.o
-  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mpmathdecimal.o
-  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mpmathdouble.o
-  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mpmath.o
-  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mp.o
-  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mpstrings.o
-  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-psout.o
-  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-tfmin.o
-  /opt/MetaPost/trunk/build/texk/web2c/libmplibextramath_a-mpmathbinary.o
+<div class="output"><pre class="knitr r">  /opt/MetaPost/trunk/build/texk/web2c/mplib.h
+</pre></div>
+</div></div>
+    <p>
+    We can also see that the build generated several static <code>mplib</code> 
+    library files ... 
+  </p>
+<div class="chunk" id="unnamed-chunk-10"><div class="rcode"><div class="output"><pre class="knitr r">  find /opt/MetaPost/trunk/build/texk/web2c -name *libmp*.a
+</pre></div>
+<div class="output"><pre class="knitr r">  /opt/MetaPost/trunk/build/texk/web2c/libmputil.a
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibextramath.a
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibbackends.a
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore.a
 </pre></div>
 </div></div>
     <p>
     In addition, the build generates a number of other libraries
-    that the <code>mplib</code> library relies on.  
+    that the <code>mplib</code> library depends on.  
   </p>
-<div class="chunk" id="unnamed-chunk-7"><div class="rcode"><div class="output"><pre class="knitr r">  ls /opt/MetaPost/trunk/build/libs/*/*.a
+<div class="chunk" id="unnamed-chunk-11"><div class="rcode"><div class="output"><pre class="knitr r">  ls /opt/MetaPost/trunk/build/libs/*/*.a
 </pre></div>
 <div class="output"><pre class="knitr r">  /opt/MetaPost/trunk/build/libs/cairo/libcairo.a
   /opt/MetaPost/trunk/build/libs/gmp/libgmp.a
@@ -314,85 +425,17 @@ Tuesday 25 September 2018
 </pre></div>
 </div></div>
     <p>
-    The C code below is taken from the MPlib API manual.  This provides
-    a simple test of the <code>mplib</code> library that describes
-    a MetaPost path equivalent to ...
-  </p>
-    <pre>
-p := (0,0)..(10,10)..(10,-5)..cycle;
-  </pre>
-    <p>
-    ... and solves it (and prints out the solution).
-  </p>
-<div class="chunk" id="unnamed-chunk-8"><div class="rcode"><div class="output"><pre class="knitr r">  #include &lt;stdio.h&gt;
-  #include &lt;stdlib.h&gt;
-  #include &lt;string.h&gt;
-  #include &quot;mplib.h&quot;
-  
-  void mp_dump_solved_path (MP mp, mp_knot h) {
-      mp_knot p, q;
-      if (h == NULL) return;
-      p = h;
-      do {
-          q=mp_knot_next(mp,p);
-          printf (&quot;(%g,%g)..controls (%g,%g) and (%g,%g)&quot;,
-                  mp_number_as_double(mp,p-&gt;x_coord),
-                  mp_number_as_double(mp,p-&gt;y_coord),
-                  mp_number_as_double(mp,p-&gt;right_x),
-                  mp_number_as_double(mp,p-&gt;right_y),
-                  mp_number_as_double(mp,q-&gt;left_x),
-                  mp_number_as_double(mp,q-&gt;left_y));
-          p=q;
-          if ( p!=h || h-&gt;data.types.left_type!=mp_endpoint) {
-              printf (&quot;\n ..&quot;);
-          }
-      } while (p!=h);
-      if ( h-&gt;data.types.left_type!=mp_endpoint )
-          printf(&quot;cycle&quot;);
-      printf (&quot;;\n&quot;);
-  }
-  
-  int main (int argc, char ** argv) {
-      MP mp ;
-      mp_knot p, first, q;
-      MP_options * opt = mp_options () ;
-      opt -&gt; command_line = NULL;
-      opt -&gt; noninteractive = 1 ;
-      mp = mp_initialize ( opt ) ;
-      if ( ! mp ) exit ( EXIT_FAILURE ) ;
-      /* Equivalent Metapost code:
-         path p;
-         p := (0,0)..(10,10)..(10,-5)..cycle;
-      */
-      first = p = mp_append_knot(mp,NULL,0,0);
-      if ( ! p ) exit ( EXIT_FAILURE ) ;
-      q = mp_append_knot(mp,p,10,10);
-      if ( ! q ) exit ( EXIT_FAILURE ) ;
-      p = mp_append_knot(mp,q,10,-5);
-      if ( ! p ) exit ( EXIT_FAILURE ) ;
-      mp_close_path_cycle(mp, p, first);
-      /* mp_dump_path(mp, first); */
-      if (mp_solve_path(mp, first)) {
-          mp_dump_solved_path(mp, first);
-      }
-      mp_free_path(mp, first);
-      mp_finish ( mp ) ;
-      free(opt);
-      return 0;
-  }
-</pre></div>
-</div></div>
-    <p>
-    The following code compiles an executable from this C code,
+    These can be used to statically
+    link <code>mplib</code> as part of a new program.
+    The following code compiles an executable from <code>infinity.c</code>,
     using the static <code>mplib</code> library files ...
   </p>
-<div class="chunk" id="unnamed-chunk-9"><div class="rcode"><div class="output"><pre class="knitr r">  gcc -c -I/opt/MetaPost/trunk/build/texk/web2c/ -o mplib-test-static.o mplib-test.c
+<div class="chunk" id="unnamed-chunk-12"><div class="rcode"><div class="output"><pre class="knitr r">  gcc -c -I/opt/MetaPost/trunk/build/texk/web2c/ -o infinity-static.o infinity.c
 </pre></div>
 
 </div></div>
-<div class="chunk" id="unnamed-chunk-10"><div class="rcode"><div class="output"><pre class="knitr r">  gcc -o mplib-test-static mplib-test-static.o
-      /opt/MetaPost/trunk/build/texk/web2c/libmplib*.o
-      /opt/MetaPost/trunk/build/texk/web2c/mplibdir/libmputil*.o
+<div class="chunk" id="unnamed-chunk-13"><div class="rcode"><div class="output"><pre class="knitr r">  gcc -o infinity-static infinity-static.o
+      -L/opt/MetaPost/trunk/build/texk/web2c -lmplibcore -lmplibbackends -lmputil -lmplibextramath
       -L/opt/MetaPost/trunk/build/libs/libpng -lpng
       -L/opt/MetaPost/trunk/build/libs/cairo -lcairo
       -L/opt/MetaPost/trunk/build/libs/pixman -lpixman
@@ -404,13 +447,17 @@ p := (0,0)..(10,10)..(10,-5)..cycle;
 
 </div></div>
     <p>
-    ... and the result of this program is a solved MetaPost path.
+    ... and the result of this program is the solved MetaPost path.
+    This path should correspond to the result that we saw 
+    earlier in the <a href="#solvedpath">log file that was generated
+    by <code>mpost</code></a>.
   </p>
-<div class="chunk" id="unnamed-chunk-11"><div class="rcode"><div class="output"><pre class="knitr r">  ./mplib-test-static
+<div class="chunk" id="unnamed-chunk-14"><div class="rcode"><div class="output"><pre class="knitr r">  ./infinity-static
 </pre></div>
-<div class="output"><pre class="knitr r">  (0,0)..controls (-1.8685,6.35925) and (4.02429,12.1436)
-   ..(10,10)..controls (16.8519,7.54208) and (16.9642,-2.22969)
-   ..(10,-5)..controls (5.87875,-6.6394) and (1.26079,-4.29094)
+<div class="output"><pre class="knitr r">  (0,0)..controls (7.86894,0) and (12.1311,10)
+   ..(20,10)..controls (26.6667,10) and (26.6667,0)
+   ..(20,0)..controls (12.1311,0) and (7.86894,10)
+   ..(0,10)..controls (-6.66667,10) and (-6.66667,0)
    ..cycle;
 </pre></div>
 </div></div>
@@ -431,12 +478,36 @@ p := (0,0)..(10,10)..(10,-5)..cycle;
     <!-- "For now, the executable still contains a statically linked libmplib." 
   -->
     <p>
-    The Dockerfile below shows this minor change.  It also takes
-    the next step, building the shared library <code>libmplib.so</code>,
-    installing that in <code>/usr/lib</code>, and installing the
+    Another difference is that we build <code>libmplib.so</code> using
+    the <code>mplib</code> object
+    files themselves 
+    so that they are part of the shared library itself.
+  </p>
+<div class="chunk" id="unnamed-chunk-15"><div class="rcode"><div class="output"><pre class="knitr r">  find /opt/MetaPost/trunk/build/texk/web2c -name libmp*.o
+</pre></div>
+<div class="output"><pre class="knitr r">  /opt/MetaPost/trunk/build/texk/web2c/mplibdir/libmputil_a-avl.o
+  /opt/MetaPost/trunk/build/texk/web2c/mplibdir/libmputil_a-decContext.o
+  /opt/MetaPost/trunk/build/texk/web2c/mplibdir/libmputil_a-decNumber.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibextramath_a-mpmathbinary.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mpmath.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mpmathdecimal.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mpstrings.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibbackends_a-pngout.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-tfmin.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mp.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-psout.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibcore_a-mpmathdouble.o
+  /opt/MetaPost/trunk/build/texk/web2c/libmplibbackends_a-svgout.o
+</pre></div>
+</div></div>
+    <p>
+    The Dockerfile below shows these minor changes.  It also takes
+    further steps, 
+    installing the shared library <code>libmplib.so</code>
+    in <code>/usr/lib</code>, and installing the
     <code>mplib.h</code> header file in <code>/usr/include</code>.
   </p>
-<div class="chunk" id="unnamed-chunk-12"><div class="rcode"><div class="output"><pre class="knitr r">  
+<div class="chunk" id="unnamed-chunk-16"><div class="rcode"><div class="output"><pre class="knitr r">  
   # Base image
   FROM ubuntu:16.04
   MAINTAINER Paul Murrell &lt;paul@stat.auckland.ac.nz&gt;
@@ -472,7 +543,7 @@ p := (0,0)..(10,10)..(10,-5)..cycle;
           -L/opt/MetaPost/trunk/build/libs/zlib -lz \
           -lm
   
-  # INSTALL MetaPost shared library
+  # INSTALL MetaPost shared library 
   RUN cp /opt/MetaPost/trunk/build/texk/web2c/libmplib.so /usr/lib &amp;&amp; \
       cp /opt/MetaPost/trunk/build/texk/web2c/mplib.h /usr/include
 </pre></div>
@@ -481,18 +552,19 @@ p := (0,0)..(10,10)..(10,-5)..cycle;
     With this set up, building our test program is as simple as the 
     following ...
   </p>
-<div class="chunk" id="unnamed-chunk-13"><div class="rcode"><div class="output"><pre class="knitr r">  gcc -c -fpic -o mplib-test-shared.o mplib-test.c
+<div class="chunk" id="unnamed-chunk-17"><div class="rcode"><div class="output"><pre class="knitr r">  gcc -c -fpic -o infinity-shared.o infinity.c
 </pre></div>
 
-<div class="output"><pre class="knitr r">  gcc -o mplib-test-shared mplib-test-shared.o -lmplib
+<div class="output"><pre class="knitr r">  gcc -o infinity-shared infinity-shared.o -lmplib
 </pre></div>
 
 </div></div>
-<div class="chunk" id="unnamed-chunk-14"><div class="rcode"><div class="output"><pre class="knitr r">  ./mplib-test-shared
+<div class="chunk" id="unnamed-chunk-18"><div class="rcode"><div class="output"><pre class="knitr r">  ./infinity-shared
 </pre></div>
-<div class="output"><pre class="knitr r">  (0,0)..controls (-1.8685,6.35925) and (4.02429,12.1436)
-   ..(10,10)..controls (16.8519,7.54208) and (16.9642,-2.22969)
-   ..(10,-5)..controls (5.87875,-6.6394) and (1.26079,-4.29094)
+<div class="output"><pre class="knitr r">  (0,0)..controls (7.86894,0) and (12.1311,10)
+   ..(20,10)..controls (26.6667,10) and (26.6667,0)
+   ..(20,0)..controls (12.1311,0) and (7.86894,10)
+   ..(0,10)..controls (-6.66667,10) and (-6.66667,0)
    ..cycle;
 </pre></div>
 </div></div>

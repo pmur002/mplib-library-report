@@ -34,6 +34,6 @@ RUN cd /opt/MetaPost/trunk/build/texk/web2c && \
         -L/opt/MetaPost/trunk/build/libs/zlib -lz \
         -lm
 
-# INSTALL MetaPost shared library
+# INSTALL MetaPost shared library 
 RUN cp /opt/MetaPost/trunk/build/texk/web2c/libmplib.so /usr/lib && \
-    cp /opt/MetaPost/trunk/build/texk/web2c/mplib.h /usr/include
+    cp /opt/MetaPost/trunk/build/texk/web2c/mplib.h /usr/include 

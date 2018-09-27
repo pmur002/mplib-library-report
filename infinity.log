@@ -1,7 +1,22 @@
-This is MetaPost, version 1.999 (TeX Live 2015/Debian) (kpathsea version 6.2.1)  25 SEP 2018 15:39
+This is MetaPost, version 1.999 (TeX Live 2015/Debian) (kpathsea version 6.2.1)  27 SEP 2018 02:39
 **infinity.mp
 (/usr/share/texlive/texmf-dist/metapost/base/mpost.mp
 (/usr/share/texlive/texmf-dist/metapost/base/plain.mp
-Preloading the plain mem file, version 1.005) ) (./infinity.mp [1] )
+Preloading the plain mem file, version 1.005) ) (./infinity.mp
+Path at line 8, before choices:
+(0,0){4096,0}
+ ..{4096,0}(20,10){4096,0}
+ ..{-4096,0}(20,0){-4096,0}
+ ..{-4096,0}(0,10){-4096,0}
+ ..{4096,0}cycle
+
+Path at line 8, after choices:
+(0,0)..controls (7.86894,0) and (12.13106,10)
+ ..(20,10)..controls (26.66667,10) and (26.66667,0)
+ ..(20,0)..controls (12.13106,0) and (7.86894,10)
+ ..(0,10)..controls (-6.66667,10) and (-6.66667,0)
+ ..cycle
+
+ [1] )
 1 output file written: infinity.svg
 
