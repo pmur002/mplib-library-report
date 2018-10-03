@@ -71,7 +71,8 @@ options(bitmapType="cairo")
   </p>
   <hr/>
   <p>
-    This report describes the steps involved in building a shared library for
+    This report records the
+    steps that were used to build a shared library for
     the MetaPost graphics system.
   </p>
 
@@ -84,8 +85,10 @@ options(bitmapType="cairo")
     is a graphics language that provides some very useful 
     features for describing curves.  For example, the 
     following MetaPost code describes an infinity symbol 
-    from only four points (plus constraints that dictate the
+    from a MetaPost "path" that consists of 
+    only four points (plus constraints that dictate the
     direction that the curve should take at each of the points).
+    This code is saved in a file called <code>infinity.mp</code>.
   </p>
   <rcode echo="FALSE">
 mpostcmd <- "mpost infinity.mp"
@@ -93,9 +96,11 @@ system(mpostcmd)
 cat(readLines("infinity.mp"), sep="\n")
   </rcode>
   <p>
-    The MetaPost description of a curve
+    The MetaPost description of a path
     is processed by a MetaPost compiler, <code>mpost</code>, which calculates
-    a set of Bezier curves (CITE).  The command below processes MetaPost
+    a set of 
+    <a href="https://en.wikipedia.org/wiki/B%C3%A9zier_curve">cubic Bezier curves</a> that draw the final curve.  
+    The command below processes MetaPost
     code in the file <code>infinity.mp</code> and produces
     a file <code>infinity.log</code>.
   </p>
@@ -108,7 +113,7 @@ log <- readLines("infinity.log")
   <p>
     The file <code>infinity.log</code> shows the Bezier control points
     that <code>mpost</code> has calculated (starting from the line
-    "<!--rinline log[grep("after choices", log)]-->".
+    "<!--rinline log[grep("after choices", log)]-->").
   </p>
   <a name="solvedpath"/>
   <rcode echo="FALSE">  
@@ -117,7 +122,8 @@ cat(log, sep="\n")
   <p>
     The MetaPost compiler also produces 
     PostScript, PNG, or SVG output to render the Bezier curves.  
-    In the example, we create a file <code>infinity.svg</code>,
+    The file <code>infinity.mp</code> produces the SVG
+    file <code>infinity.svg</code>,
     which is shown below.
   </p>
   <img src="infinity.svg"/>
@@ -142,11 +148,23 @@ cat(log, sep="\n")
        TeXLive/source/texk/web2c/mplibdir/lmplib.c includes mplib.h etc -->
   <p>
     The <code>mplib</code> library provides C functions that allow us
-    to define MetaPost curves, and solve them, in C code.
-    For example, the C code below uses the <code>mplib</code> API to
-    describe and solve the infinity symbol that we draw with MetaPost
-    code earlier.
+    to define MetaPost paths, and solve them, in C code.
+    For example, the C code below, which is saved in a file called
+    <code>infinity.c</code>, uses the <code>mplib</code> API to
+    describe and solve the infinity symbol that we described with MetaPost
+    code in the file <code>infinity.mp</code>.  
   </p>
+  <p>
+    The main action occurs in the <code>main</code> function;
+    the <code>mp_dump_solved_path</code> function is just there to
+    print out the answer (the code is based on an example in 
+    <a href="#mplibapi"/>).  There are calls to the function
+    <code>mp_append_knot</code> to create points on a path,
+    calls to <code>mp_set_knot_direction</code> to define directions
+    at each point, and a call to <code>mp_solve_path</code>
+    that calculates Bezier curves to draw the final curve.
+  </p>
+  <a name="inf.c"/>
   <rcode echo="FALSE">
 cat(readLines("infinity.c"),
     sep="\n")
@@ -158,17 +176,20 @@ cat(readLines("infinity.c"),
     (<a href="#Hoekwater:TB27-1-18"/>, 
     <a href="#Hoekwater:TB28-3-317"/>,
     <a href="#Hoekwater:TB29-3-380"/>), and there is 
-    a MPLib API Manual (<a href="#mplibapi"/>), only the
+    an "MPLib API Manual" (<a href="#mplibapi"/>), only the
     <code>mpost</code> standalone program is included as
     part of large TeX distributions such as 
     <a href="https://www.tug.org/texlive/">TeX Live</a> and
     <a href="https://miktex.org/">MikTeX</a>.  
     Furthermore, there are no "development" distributions
     of these packages that include header files, let alone 
-    pre-built libraries.
+    pre-built libraries for <code>mplib</code>.
+    Both LuaTeX and ConTeXt are part of these large distributions,
+    so have access to <code>mplib</code> when they are built.
   </p>
   <p>
-    This means that, if we want to create a program that links to
+    This means that, if we want to create a new program,
+    like the file <code>infinity.c</code>, that links to
     the <code>mplib</code> library, we must start with a copy
     of the MetaPost source code and do a bit more of the work 
     ourselves.
@@ -176,12 +197,14 @@ cat(readLines("infinity.c"),
   <!-- <a href="http://tug.org/pipermail/metapost/2010-April/001917.html">email
     thread on metapost@tug.org</a> -->
   <p>
-    This report describes the steps for making use of the <code>mplib</code>
+    This report describes a series of
+    steps for making use of the <code>mplib</code>
     library within a new C program, with demonstrations of building both 
     static and dynamic <code>mplib</code> libraries.
   </p>
   <p>
-    This report will focus solely on solutions within an Ubuntu Linux
+    This report will focus solely on solutions with TeX Live in
+    an Ubuntu Linux
     environment.  The information should have some relevance to 
     other Linux distributions, but may not be very helpful with
     respect to Windows or Mac OS environments.
@@ -199,17 +222,20 @@ cat(readLines("infinity.c"),
   <p>
     Fortunately, it is also straightforward to obtain and build the TeX Live 
     source code (https://www.tug.org/texlive/) and, even better, 
-    we can just get the source code relating to MetaPost and build that
-    (https://www.tug.org/metapost.html; 
-    https://serveur-svn.lri.fr/svn/modhel/metapost/; user/pw = anonsvn/anonsvn).
+    we can 
+    <a href="https://www.tug.org/metapost.html">just get the source code relating to MetaPost</a> and build that
+    (<a href="https://serveur-svn.lri.fr/svn/modhel/metapost/">https://serveur-svn.lri.fr/svn/modhel/metapost</a>; user/pw = anonsvn/anonsvn).
   </p>
   <p>
     Building MetaPost simply 
     involves a subversion checkout of the MetaPost source files
-    followed by a call to the provided shell script <code>build.sh</code>.
+    followed by a call to the shell script <code>build.sh</code>
+    that is included in the root directory of the MetaPost source code.
   </p>
   <p>
-    The Dockerfile below builds a container based on Ubuntu 16.04 with
+    The Dockerfile below builds a Docker container 
+    (<a href="#Merkel:2014:DLL:2600239.2600241"/>)
+    based on Ubuntu 16.04 with
     (the development version of) MetaPost downloaded and built in 
     <code>/opt/MetaPost/trunk</code>.
   </p>
@@ -257,7 +283,8 @@ dockerrun("mplib-static", cmd)
   <p>
     These can be used to statically
     link <code>mplib</code> as part of a new program.
-    The following code compiles an executable from <code>infinity.c</code>,
+    The following code compiles an executable from <code>infinity.c</code>
+    (shown <a href="#inf.c">earlier in this report</a>),
     using the static <code>mplib</code> library files ...
   </p>
   <rcode echo="FALSE">
@@ -281,7 +308,9 @@ cat(gsub(" (/|-L)", "\n    \\1", cmd))
 dockerrun("mplib-static", cmd)
   </rcode>
   <p>
-    ... and the result of this program is the solved MetaPost path.
+    This produces an executable file, <code>infinity-static</code>,
+    and when we run this program, the result is the solved MetaPost path
+    for the infinity symbol curve.
     This path should correspond to the result that we saw 
     earlier in the <a href="#solvedpath">log file that was generated
     by <code>mpost</code></a>.
@@ -309,7 +338,7 @@ dockerrun("mplib-static", cmd)
   <p>
     Another difference is that we build <code>libmplib.so</code> using
     the <code>mplib</code> object
-    files themselves 
+    files (<code>.o</code> files rather than <code>.a</code> files)
     so that they are part of the shared library itself.
   </p>
   <rcode echo="FALSE">
@@ -360,18 +389,30 @@ dockerrun("mplib-shared", cmd)
     is that the download is much larger and the build is longer and
     produces more files.  However, a complete TeX Live build may
     be useful for supporting a wider range of MetaPost images
-    (e.g., images that include TeX-formatted text labels).
+    (e.g., MetaPost images that include TeX-formatted text labels).
   </p>
 
   <h2><a name="summary">Summary</a></h2>
   <p>
-  </p>
-  <p>
+    This report describes a series of steps that can be used to build
+    a shared library for MetaPost.  This makes it possible to
+    write a new program that can make use of the powerful curve description
+    facilities of MetaPost.
+    The series of steps is provided in code form as a Dockerfile
+    so that a Docker container that contains the MetaPost shared library
+    can be generated easily.
   </p>
 
   <h2><a name="requirements">Technical requirements</a></h2>
   <p>
-    The examples and discussion in this document relate to ...
+    The examples and discussion in this document relate to
+    the <a href="https://serveur-svn.lri.fr/svn/modhel/metapost">subversion 
+    archive</a> of the development version of the MetaPost
+    source code, plus a Dockerfile that describes the construction of a 
+    <a href="MetaPost-static/Dockerfile">static MetaPost
+    library</a> and a Dockerfile that describes the construction of a 
+    <a href="MetaPost-shared/Dockerfile">shared MetaPost
+    library</a>.
   </p>
   <p>
     This report was generated within a Docker container
@@ -411,12 +452,22 @@ dockerrun("mplib-shared", cmd)
       alternatively, the image can be rebuilt from its 
       <a href="Dockerfile">Dockerfile</a>.
     </li>
+    <li>
+      The Docker image for the 
+      <a href="https://hub.docker.com/r/pmur002/mplib-static/">static MetaPost
+      library</a>.
+    </li>
+    <li>
+      The Docker image for the 
+      <a href="https://hub.docker.com/r/pmur002/mplib-shared/">shared MetaPost
+      library</a>.
+    </li>
   </ul>
 
   <h2>How to cite this document</h2>
   <p>
     Murrell, P. (2018). "Building an mplib Shared Library" 
-    Technical Report 2018-??, Department of Statistics, The University of Auckland. 
+    Technical Report 2018-10, Department of Statistics, The University of Auckland. 
     [ <a href="how-to-cite.bib">bib</a> ] 
   </p>
 
@@ -449,6 +500,9 @@ dockerrun("mplib-shared", cmd)
     </li>
     <li>
       <a name="luatex"/>
+    </li>
+    <li>
+      <a name="Merkel:2014:DLL:2600239.2600241"/>
     </li>
   </ul>
 
